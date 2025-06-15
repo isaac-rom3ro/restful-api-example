@@ -1,6 +1,6 @@
 <?php
+require_once "./bootstrap.php";
 
-ini_set("display_errors", "On"); // Show errors
 # $_SERVER["REQUEST_URI"];  Get the full path including resource, id, indexes
 # parse_url(, PHP_URL_PATH) transforms it into string 
 $url = parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH);
@@ -25,19 +25,16 @@ if($resource != "tasks") { // We are checking if the resource is valid
     exit; // and kill the process
 }
 
-// requiring classes without autoloader yet
-require_once "../vendor/autoload.php";
-header("Content-Type: application/json;charset= UTF-8");
-// Set the error handler to our function
-set_error_handler("ErrorHandler::handleError");
-set_exception_handler("ErrorHandler::handleException"); // This exception will handle the errors associated with code not the response i guess
-# Here im using a package that loads the env file variables
-$dotenv = Dotenv\Dotenv::createImmutable(dirname(__DIR__));
-$dotenv->load();
-
 # To ensure security we need to use env variables
 # After create .env just use (variableName="value")
 $database = new Database(host:$_ENV["DB_HOST"], dbname:$_ENV["DB_NAME"], user:$_ENV["DB_USER"], password:$_ENV["DB_PASSWORD"]);
+
+$user_gateway = new UserGateway(database: $database);
+
+$auth = new Auth(user_gateway: $user_gateway);
+if(! $auth->authenticateAPIKey()) {
+    exit;
+}
 
 // We are using a gateway to establish a safe connection between the controller and the database
 $taskGateway = new TaskGateway(database: $database);
