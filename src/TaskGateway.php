@@ -13,13 +13,15 @@ class TaskGateway {
     }
 
     // Simple method to get all those tasks
-    public function getAll(): array {
+    public function getAllFromUser(int $user_id): array {
         // SQL query
-        $sql = "SELECT * FROM task ORDER BY name";
+        $sql = "SELECT * FROM task WHERE user_id =:user_id";
 
         // $this->conn->query(); -> returns a statement which is the result of the query
-        // query() method already execures the query only leaking the fetch()
-        $stmt = $this->conn->query($sql);
+        // query() method already executes the query only leaking the fetch()
+        $stmt = $this->conn->prepare($sql);
+        $stmt->bindParam(":user_id", $user_id, PDO::PARAM_INT);
+        $stmt->execute();
 
         // // With this method, we return an ASSOCIATIVE ARRAY 
         // return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -39,14 +41,15 @@ class TaskGateway {
     }
 
     // This function returns array or false(because fetch if there is no row so is returned false) 
-    public function get(string $id): array | false {
+    public function getFromUser(string $id, int $user_id): array | false {
         // Query for get the selected task using id
-        $sql = "SELECT * FROM task WHERE id = :id";
+        $sql = "SELECT * FROM task WHERE id = :id AND user_id =:user_id";
 
         // Preparing the statement
         $stmt = $this->conn->prepare($sql);
         // Adding the parameter
-        $stmt->bindParam(":id", $id);
+        $stmt->bindParam(":id", $id, PDO::PARAM_INT);
+        $stmt->bindParam(":user_id", $user_id, PDO::PARAM_INT);
         // Execute the query
         $stmt->execute();
 
@@ -56,9 +59,9 @@ class TaskGateway {
         return $data;
     }
 
-    public function create(array $data) : string {
+    public function createFromUser(array $data, int $user_id) : string {
         // Prepare
-        $sql = "INSERT INTO task (name, priority, is_completed) VALUES (:name, :priority, :is_completed)";
+        $sql = "INSERT INTO task (name, priority, is_completed, user_id) VALUES (:name, :priority, :is_completed, :user_id)";
         $stmt = $this->conn->prepare(query: $sql);
 
         $stmt->bindValue(":name", $data["name"], PDO::PARAM_STR);
@@ -70,7 +73,8 @@ class TaskGateway {
         }
 
         // If there is no data inside the index, we are assigning the false value
-        $stmt->bindValue("is_completed", $data["is_completed"] ?? false,  PDO::PARAM_BOOL);
+        $stmt->bindValue(":is_completed", $data["is_completed"] ?? false,  PDO::PARAM_BOOL);
+        $stmt->bindValue(":user_id", $user_id,  PDO::PARAM_INT);
 
         $stmt->execute();
 
@@ -78,7 +82,7 @@ class TaskGateway {
         return $this->conn->lastInsertId();
     }
 
-    public function update(string $id, array $data): int {
+    public function updateFromUser(string $id, array $data, int $user_id): int {
         $fields = []; // Keep the existents updates 
 
         // Each if check whether the column is specified
@@ -112,27 +116,29 @@ class TaskGateway {
                 return "$value = :$value";
             }, array_keys($fields));
             
-            $sql = "UPDATE task". " SET ". implode(", ", $sets). " WHERE id = :id";
+            $sql = "UPDATE task". " SET ". implode(", ", $sets). " WHERE id =:id AND user_id =:user_id";
             
             $stmt = $this->conn->prepare($sql);
             $stmt->bindValue(":id", $id, PDO::PARAM_INT);
-
+            $stmt->bindValue(":user_id", $user_id, PDO::PARAM_INT);
+            
             // Bind the values
             foreach($fields as $column => $value) {
                 $stmt->bindValue(":$column", $value[0], $value[1]);
             }
+            
 
             $stmt->execute();
-
             // Return the rows updated
             return $stmt->rowCount();
         }
     }
 
-    public function delete(string $id): int {
-        $sql = "DELETE FROM task WHERE id = :id";
+    public function deleteFromUser(string $id, $user_id): int {
+        $sql = "DELETE FROM task WHERE id = :id AND user_id =:user_id";
         $stmt = $this->conn->prepare(query: $sql);
         $stmt->bindValue(":id", $id, PDO::PARAM_INT);
+        $stmt->bindValue(":user_id", $user_id, PDO::PARAM_INT);
 
         $stmt->execute();
 

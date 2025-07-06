@@ -34,7 +34,7 @@
         $stmt->execute();
 
         if($stmt->rowCount() > 0) {
-            echo "Registered";
+            echo "Registered Sucessful your api key is: $api_key";
         }
     }
 ?>

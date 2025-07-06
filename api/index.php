@@ -32,14 +32,19 @@ $database = new Database(host:$_ENV["DB_HOST"], dbname:$_ENV["DB_NAME"], user:$_
 $user_gateway = new UserGateway(database: $database);
 
 $auth = new Auth(user_gateway: $user_gateway);
-if(! $auth->authenticateAPIKey()) {
+if(! $auth->authenticateAccessToken()) {
     exit;
 }
 
+// $headers = apache_request_headers();
+// print_r($headers);
+
+// Getting the user id from the API key
+$user_id = $auth->getUserId();
 // We are using a gateway to establish a safe connection between the controller and the database
 $taskGateway = new TaskGateway(database: $database);
 
 // The controller uses as priority the database 
-$controller = new TaskController(gateway: $taskGateway);
+$controller = new TaskController(gateway: $taskGateway, user_id: $user_id);
 // Process the request
 $controller->processRequest(method: $requestMethod, id: $id);

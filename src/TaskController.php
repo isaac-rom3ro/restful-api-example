@@ -3,14 +3,14 @@
 declare(strict_types = 1);
 
 class TaskController {
-    public function __construct(private TaskGateway $gateway) {}
+    public function __construct(private TaskGateway $gateway, private int $user_id) {}
 
     public function processRequest(string $method, ?string $id): void {
         //?string -> means that the variable can receive string or a null value
         if($id == null) {
             if($method == "GET") {
                 // Show the data in json format
-                echo json_encode($this->gateway->getAll());
+                echo json_encode($this->gateway->getAllFromUser(user_id: $this->user_id));
             } else if($method == "POST") {
                 // php://input -> get contents with assigned value like name=Isaac from the request body 
                 // json_decode(Transform it into an object but as we passed true inside file_get_contents the return is about associative array)
@@ -25,14 +25,14 @@ class TaskController {
                     return;
                 }
 
-                $id = $this->gateway->create($data);
+                $id = $this->gateway->createFromUser(data: $data, user_id: $this->user_id);
                 $this->respondCreated($id);
             } else {
                 $this->responseMethodNotAllowed("GET, POST");
             }
         } else {
             // We are checking if the task + id is valid
-            $task = $this->gateway->get(id: $id);
+            $task = $this->gateway->getFromUser(id: $id, user_id: $this->user_id);
 
             // If is not
             if($task === false) {
@@ -61,11 +61,11 @@ class TaskController {
                     }
 
                     // Call the method
-                    $row = $this->gateway->update(id: $id, data: $data);
+                    $row = $this->gateway->updateFromUser(id: $id, data: $data, user_id: $this->user_id);
                     $this->respondUpdated(row: $row);
                     break;
                 case "DELETE":
-                    $row = $this->gateway->delete(id: $id);
+                    $row = $this->gateway->deleteFromUser(id: $id, user_id: $this->user_id);
                     $this->respondDelete(row: $row);
                     break;
                 default:
