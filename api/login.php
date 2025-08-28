@@ -48,11 +48,24 @@ if(! password_verify(password: $data["password"], hash: $user["password_hash"]))
     exit;
 }
 
-// In order to save credentials with security layer 
-// We use base64_encode in a json associative array containing the informations needed 
-$token = base64_encode(json_encode([
-    "id" => $user["id"],
+// In order to use JWT
+// First we have to get the informations 
+// key -> value
+// using sub instead of id is a sub
+// Claim Standard
+$payload = [
+    "sub" => $user["id"],
     "username" => $user["name"]
-]));
+];
 
-echo $token;
+// In order to save credentials with security layer 
+// We used to have base64_encode in a json associative array containing the informations needed
+// Since it's not secure, stick with JWT 
+// $access_token = base64_encode(json_encode($payload));
+
+$codec = new JWTCodec();
+$access_token = $codec->encode($payload);
+
+echo json_encode([
+    "access_token" => $access_token 
+]);
