@@ -1,6 +1,15 @@
 <?php
 
+declare(strict_types = 1);
 class JWTCodec {
+
+    private string $secretKey;
+
+    public function __construct(string $secretKey)
+    {
+        $this->secretKey = $secretKey;
+    }
+
     public function encode(array $payload): string 
     {
         // payload : our container which has information about the user
@@ -18,7 +27,7 @@ class JWTCodec {
         
         $signature = hash_hmac("sha256",
                                 $header . "." . $payload,
-                                "7e9f0a2c8d5b3e41c6fa9b7d8e23a1f4b092cde8f53a6b1c7d24f9815e3c7a0d", 
+                                $this->secretKey, 
                                 true);
         $signature = $this->base64urlEncode($signature);
 
@@ -39,14 +48,18 @@ class JWTCodec {
 
         $signature = hash_hmac("sha256",
                                 $matches["header"] . "." . $matches["payload"],
-                                "7e9f0a2c8d5b3e41c6fa9b7d8e23a1f4b092cde8f53a6b1c7d24f9815e3c7a0d", 
+                                $this->secretKey, 
                                 true);
 
         $signatureFromToken = $this->base64urlDecode($matches["signature"]);
 
-        if (hash_equals($signature, $signatureFromToken) === false) throw new Exception("signature does not match");
+        if (hash_equals($signature, $signatureFromToken) === false) throw new InvalidSignatureException("signature does not match");
 
-        $payload = json_decode($this->base64urlDecode($matches["payload"]), true);
+        $payload = json_decode($this->base64urlDecode($matches["payload"]), true)[0];
+
+        if ($payload["exp"] < time()) {
+            throw new TokenExpiredException();
+        }
 
         return $payload;
     }

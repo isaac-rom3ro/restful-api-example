@@ -48,24 +48,10 @@ if(! password_verify(password: $data["password"], hash: $user["password_hash"]))
     exit;
 }
 
-// In order to use JWT
-// First we have to get the informations 
-// key -> value
-// using sub instead of id is a sub
-// Claim Standard
-$payload = [
-    "sub" => $user["id"],
-    "username" => $user["name"]
-];
+$codec = new JWTCodec($_ENV["SECRET_KEY"]);
 
-// In order to save credentials with security layer 
-// We used to have base64_encode in a json associative array containing the informations needed
-// Since it's not secure, stick with JWT 
-// $access_token = base64_encode(json_encode($payload));
+require_once __DIR__ . "/tokens.php";
 
-$codec = new JWTCodec();
-$access_token = $codec->encode($payload);
+$refreshTokenGateway = new RefreshTokenGateway(database: $database, key: $_ENV["SECRET_KEY"]);
 
-echo json_encode([
-    "access_token" => $access_token 
-]);
+$refreshTokenGateway->create(token: $refresh_token, expiry: $refresh_token_expiry);

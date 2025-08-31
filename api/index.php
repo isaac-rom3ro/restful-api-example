@@ -31,7 +31,9 @@ $database = new Database(host:$_ENV["DB_HOST"], dbname:$_ENV["DB_NAME"], user:$_
 
 $user_gateway = new UserGateway(database: $database);
 
-$auth = new Auth(user_gateway: $user_gateway);
+$codec = new JWTCodec($_ENV["SECRET_KEY"]);
+
+$auth = new Auth(user_gateway: $user_gateway, codec: $codec);
 if(! $auth->authenticateAccessToken()) {
     exit;
 }
