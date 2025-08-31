@@ -1,42 +1,55 @@
 <?php
-    require __DIR__ . "/vendor/autoload.php";
+/**
+ * User Registration Page
+ * Handles user registration with secure password hashing
+ * Creates new users with API keys for authentication
+ * Provides both form processing and HTML interface
+ */
 
-    // Checking if the form was submitted by POST method
-    if($_SERVER["REQUEST_METHOD"] === "POST") {
-        // In order to use .env 
-        $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
-        $dotenv->load();
+require __DIR__ . "/vendor/autoload.php";
 
-        // Connection to database
-        $database = new Database(host: $_ENV["DB_HOST"],
-                                 dbname: $_ENV["DB_NAME"],
-                                 user: $_ENV["DB_USER"], 
-                                 password: $_ENV["DB_PASSWORD"]);
-        
-        $conn = $database->getConnection();
-        // SQL with placeholders  
-        $sql = "INSERT INTO user (name, username, password_hash, api_key) VALUES (:name, :username, :password_hash, :api_key)";                                 
+// Handle form submission
+if($_SERVER["REQUEST_METHOD"] === "POST") {
+    // Load environment variables for database connection
+    $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
+    $dotenv->load();
 
-        // Hash the password
-        $password_hash = password_hash(password: $_POST["password"], algo: PASSWORD_DEFAULT);
+    // Initialize database connection using environment variables
+    $database = new Database(
+        host: $_ENV["DB_HOST"],
+        dbname: $_ENV["DB_NAME"],
+        user: $_ENV["DB_USER"], 
+        password: $_ENV["DB_PASSWORD"]
+    );
+    
+    $conn = $database->getConnection();
+    
+    // SQL query to insert new user with prepared statement
+    $sql = "INSERT INTO user (name, username, password_hash, api_key) VALUES (:name, :username, :password_hash, :api_key)";                                 
 
-        // Create a random hexadecimal api_key
-        $api_key = bin2hex(random_bytes(length: 16));
+    // Hash the password securely using PHP's built-in password_hash function
+    // PASSWORD_DEFAULT uses the best available algorithm (currently bcrypt)
+    $password_hash = password_hash(password: $_POST["password"], algo: PASSWORD_DEFAULT);
 
-        // binding values
-        $stmt = $conn->prepare(query: $sql);
-        $stmt->bindValue(param:":name", value:$_POST["name"], type: PDO::PARAM_STR);
-        $stmt->bindValue(param:":username", value:$_POST["username"], type: PDO::PARAM_STR);
-        $stmt->bindValue(param:":password_hash", value:$password_hash, type: PDO::PARAM_STR);
-        $stmt->bindValue(param:":api_key", value:$api_key, type: PDO::PARAM_STR);
+    // Generate a random API key for the user
+    // bin2hex converts binary to hexadecimal for safe storage
+    $api_key = bin2hex(random_bytes(length: 16));
 
-        // Execute
-        $stmt->execute();
+    // Prepare the statement and bind parameters
+    $stmt = $conn->prepare(query: $sql);
+    $stmt->bindValue(param:":name", value:$_POST["name"], type: PDO::PARAM_STR);
+    $stmt->bindValue(param:":username", value:$_POST["username"], type: PDO::PARAM_STR);
+    $stmt->bindValue(param:":password_hash", value:$password_hash, type: PDO::PARAM_STR);
+    $stmt->bindValue(param:":api_key", value:$api_key, type: PDO::PARAM_STR);
 
-        if($stmt->rowCount() > 0) {
-            echo "Registered Sucessful your api key is: $api_key";
-        }
+    // Execute the statement
+    $stmt->execute();
+
+    // Check if registration was successful
+    if($stmt->rowCount() > 0) {
+        echo "Registered Successfully! Your API key is: $api_key";
     }
+}
 ?>
 
 <!DOCTYPE html>
@@ -45,13 +58,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register</title>
-<link
-  rel="stylesheet"
-  href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
->
+    <!-- Include Pico CSS for modern styling -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+    >
 </head>
 <body>
     <main>
+        <!-- Registration form -->
         <form action="" method="POST">
             <label for="name">Name</label>
             <input type="text" name="name" id="">

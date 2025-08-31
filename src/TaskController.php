@@ -1,58 +1,76 @@
 <?php
+/**
+ * Task Controller Class
+ * Handles HTTP requests for task operations
+ * Routes requests based on HTTP method and resource ID
+ * Validates input data and provides appropriate responses
+ */
 
 declare(strict_types = 1);
 
 class TaskController {
+    /**
+     * Constructor - Initializes controller with dependencies
+     * @param TaskGateway $gateway For task data operations
+     * @param int $user_id Current authenticated user ID
+     */
     public function __construct(private TaskGateway $gateway, private int $user_id) {}
 
+    /**
+     * Main request processor - Routes requests based on method and ID
+     * @param string $method HTTP method (GET, POST, PATCH, DELETE)
+     * @param string|null $id Task ID (null for collection operations)
+     */
     public function processRequest(string $method, ?string $id): void {
-        //?string -> means that the variable can receive string or a null value
+        // Handle collection operations (no specific ID)
         if($id == null) {
             if($method == "GET") {
-                // Show the data in json format
+                // Get all tasks for the user
                 echo json_encode($this->gateway->getAllFromUser(user_id: $this->user_id));
             } else if($method == "POST") {
-                // php://input -> get contents with assigned value like name=Isaac from the request body 
-                // json_decode(Transform it into an object but as we passed true inside file_get_contents the return is about associative array)
-                // (array) -> we are using type cast because if the return was null it converts into an empty array[]
+                // Create a new task
+                // Parse JSON request body
                 $data = (array)(json_decode(file_get_contents("php://input", true)));
 
+                // Validate the input data
                 $errors = $this->getValidationErrors(data: $data);
 
-                // If there is error
+                // If validation fails, return error response
                 if(! empty($errors)) {
                     $this->respondUnprocessableEntity(errors: $errors);
                     return;
                 }
 
+                // Create the task and return success response
                 $id = $this->gateway->createFromUser(data: $data, user_id: $this->user_id);
                 $this->respondCreated($id);
             } else {
+                // Method not allowed for collection
                 $this->responseMethodNotAllowed("GET, POST");
             }
         } else {
-            // We are checking if the task + id is valid
+            // Handle individual resource operations (with ID)
+            // First check if the task exists and belongs to the user
             $task = $this->gateway->getFromUser(id: $id, user_id: $this->user_id);
 
-            // If is not
             if($task === false) {
-                // Response
+                // Task not found or doesn't belong to user
                 $this->respondNotFound(id: $id);
-                // Return it because we dont need this method anymore
                 return;
             }
             
+            // Route to appropriate method based on HTTP verb
             switch($method) {
                 case "GET":
-                    // Show data in json format
+                    // Return the specific task
                     echo json_encode($task);
                     break;
                 case "PATCH":
-                    // This method will handle an update
-                    // give us /resource and /id
+                    // Update the task
+                    // Parse JSON request body
                     $data = (array)(json_decode(file_get_contents("php://input", true)));
                     
-                    // Check for invalids
+                    // Validate the update data
                     $errors = $this->getValidationErrors(data: $data, is_new: false);
 
                     if(! empty($errors)) {
@@ -60,52 +78,68 @@ class TaskController {
                         return;
                     }
 
-                    // Call the method
+                    // Update the task and return response
                     $row = $this->gateway->updateFromUser(id: $id, data: $data, user_id: $this->user_id);
                     $this->respondUpdated(row: $row);
                     break;
                 case "DELETE":
+                    // Delete the task
                     $row = $this->gateway->deleteFromUser(id: $id, user_id: $this->user_id);
                     $this->respondDelete(row: $row);
                     break;
                 default:
+                    // Method not allowed for individual resource
                     $this->responseMethodNotAllowed("GET, PATCH, DELETE");
                     break;
             }
         }
     }
 
-    // Respond and Validations
+    // Response Methods
 
-    // To handle the 405 code we need a function
+    /**
+     * Return 405 Method Not Allowed response
+     * @param string $allowed_methods Comma-separated list of allowed methods
+     */
     private function responseMethodNotAllowed(string $allowed_methods): void {
-        http_response_code(405);
-        header("Allow: {$allowed_methods}"); // Pass the allowed methods here 
+        http_response_code(405); // Method Not Allowed
+        header("Allow: {$allowed_methods}"); // Tell client what methods are allowed
     }
 
+    /**
+     * Return 404 Not Found response
+     * @param string $id The ID that was not found
+     */
     private function respondNotFound(string $id): void {
-        // Set the http response to 404 not found
-        http_response_code(404);
-        // echo a message
+        http_response_code(404); // Not Found
         echo json_encode(["message" => "The task with the id {$id} was not found"]);
     }
 
-    // Response for a successful task created
+    /**
+     * Return 201 Created response
+     * @param string $id The ID of the newly created resource
+     */
     private function respondCreated(string $id): void {
-        http_response_code(201); // 201 -> Create 
+        http_response_code(201); // Created
         echo json_encode(["message" => "Task created", "id" => $id]);
     }
 
-    // Get errors associated with syntax of the request 
+    /**
+     * Validate input data for task operations
+     * @param array $data The data to validate
+     * @param bool $is_new Whether this is for creating a new task
+     * @return array Array of validation errors
+     */
     private function getValidationErrors(array $data, bool $is_new = true): array {
         $errors = [];
 
+        // Name is required for new tasks
         if($is_new && empty($data["name"])) {
             $errors[] = "name is required";
         }
 
+        // If priority is provided, it must be an integer
         if(!empty($data["priority"])) {
-            // Check if the data is an integer
             if(filter_var($data["priority"], FILTER_VALIDATE_INT) === false) {
                 $errors[] = "priority must be an integer";
             }
@@ -114,20 +148,30 @@ class TaskController {
         return $errors;
     }
 
-    // Handle the response code 422 Unprocessable Content
+    /**
+     * Return 422 Unprocessable Entity response
+     * @param array $errors Array of validation errors
+     */
     private function respondUnprocessableEntity(array $errors): void {
-        http_response_code(422);
+        http_response_code(422); // Unprocessable Entity
         echo json_encode(["errors" => $errors]);
     }
 
-    // Respond for the respond updated
+    /**
+     * Return 200 OK response for successful update
+     * @param int $row Number of rows affected
+     */
     private function respondUpdated(int $row): void {
-        http_response_code(200);
+        http_response_code(200); // OK
         echo json_encode(["message" => "Task updated", "rows" => $row]);
     }
 
+    /**
+     * Return 200 OK response for successful deletion
+     * @param int $row Number of rows affected
+     */
     private function respondDelete(int $row) {
-        http_response_code(200);
+        http_response_code(200); // OK
         echo json_encode(["message" => "Task deleted", "row" => $row]);
     }
 }

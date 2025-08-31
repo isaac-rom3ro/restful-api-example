@@ -1,66 +1,86 @@
 <?php
+/**
+ * Token Refresh Endpoint - Issues new access tokens using refresh tokens
+ * This endpoint allows clients to get new access tokens without re-authenticating
+ * Expected request: POST with JSON body containing refresh token
+ */
+
 declare(strict_types=1);
 
 require __DIR__ . '/bootstrap.php';
 
-// Check if the request method was POST
+// Validate that the request method is POST
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-    http_response_code(405);
+    http_response_code(405); // Method Not Allowed
     header("Allow: POST");
     exit;
 }
 
-// data associated to inputs like name="" password"" in the request
+// Parse the JSON request body to extract the refresh token
 $data = (array)(json_decode(file_get_contents("php://input", true)));
 
-// Check for the credential exists
+// Validate that the refresh token is provided
 if(
     ! array_key_exists(key: "token", array: $data)
 ) {
-    http_response_code(response_code: 400);
+    http_response_code(response_code: 400); // Bad Request
     echo json_encode(["message" => "missing token"]);
     exit;
 }
 
+// Initialize JWT codec for token validation
 $codec = new JWTCodec($_ENV["SECRET_KEY"]);
 
+// Decode and validate the refresh token
 try {
     $payload = $codec->decode($data["token"]);
 } catch (Exception) {
-    http_response_code(400);
-
+    // Token is invalid (expired, malformed, or tampered)
+    http_response_code(400); // Bad Request
     echo json_encode(["message" => "invalid token"]);
     exit;
 } 
 
+// Extract user ID from the token payload
 $userId = $payload["sub"];
 
-$database = new Database(host:$_ENV["DB_HOST"], dbname:$_ENV["DB_NAME"], user:$_ENV["DB_USER"], password:$_ENV["DB_PASSWORD"]);
+// Initialize database connection
+$database = new Database(
+    host: $_ENV["DB_HOST"], 
+    dbname: $_ENV["DB_NAME"], 
+    user: $_ENV["DB_USER"], 
+    password: $_ENV["DB_PASSWORD"]
+);
 
+// Create refresh token gateway to validate token against database
 $refreshTokenGateway = new RefreshTokenGateway(database: $database, key: $_ENV["SECRET_KEY"]);
 
+// Check if the refresh token exists in our whitelist
+// This prevents use of revoked tokens
 $refresh_token = $refreshTokenGateway->getByToken($data["token"]);
 
 if ($refresh_token === false) {
-    http_response_code(400);
-
+    http_response_code(400); // Bad Request
     echo json_encode(["message" => "invalid token (not in whitelist)"]);
     exit;
 }
 
-
+// Verify that the user still exists in the database
 $userGateway = new UserGateway(database: $database);
-
 $user = $userGateway->getByID(id: $userId);
 
 if ($user === false) {
-    http_response_code(401);
+    http_response_code(401); // Unauthorized
     echo json_encode(["message" => "invalid authentication"]);
     exit;
 }
 
+// Include token generation logic to create new tokens
 require_once __DIR__ . "/tokens.php";
 
+// Delete the old refresh token to prevent reuse
+// This implements token rotation for security
 $refreshTokenGateway->delete($data["token"]);
 
+// Store the new refresh token in the database
 $refreshTokenGateway->create(token: $refresh_token, expiry: $refresh_token_expiry);
